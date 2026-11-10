@@ -1,0 +1,8 @@
+# Python 3.12；CUDA 版本的 PyTorch 请按 README 先行安装。
+torch==2.6.0
+transformers==4.57.1
+peft==0.17.1
+accelerate==1.10.1
+bitsandbytes==0.48.1; sys_platform == "linux"
+wandb==0.22.3
+PyYAML==6.0.3

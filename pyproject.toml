@@ -1,0 +1,28 @@
+[tool.ruff]
+target-version = "py312"
+line-length = 100
+
+[tool.ruff.lint]
+select = ["E4", "E7", "E9", "F", "I", "B", "UP", "N", "C90", "ANN", "D"]
+# 动态第三方库、JSON/YAML 边界可显式使用 Any；中文说明不检查英文祈使句。
+ignore = ["ANN401", "D203", "D213", "D400", "D401", "D415"]
+
+[tool.ruff.lint.mccabe]
+max-complexity = 15
+
+[tool.ruff.lint.per-file-ignores]
+# unittest 测试方法以行为名称描述断言，不强制逐个写文档和类型。
+"tests/*.py" = ["D", "ANN"]
+
+[tool.mypy]
+python_version = "3.12"
+files = ["ner_types.py", "ner_utils.py", "model_runtime.py", "ner_trainer.py", "prepare_data.py", "train.py", "evaluate.py", "predict.py"]
+check_untyped_defs = true
+disallow_untyped_defs = true
+warn_unused_ignores = true
+# 跟踪导入但隐藏非目标模块的诊断；项目生产模块仍全部检查。
+follow_imports = "silent"
+ignore_missing_imports = true
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]

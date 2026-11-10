@@ -205,6 +205,13 @@ cython_debug/
 # Temporary file for partial code execution
 tempCodeRunnerFile.py
 
+# 本项目运行产物
+.DS_Store
+# data/processed/
+outputs/
+wandb/
+.superpowers/
+
 # Ruff stuff:
 .ruff_cache/
 

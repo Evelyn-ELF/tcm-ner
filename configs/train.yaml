@@ -1,0 +1,33 @@
+# 相对路径以执行命令的当前目录为基准，建议从项目根目录运行。
+model:
+  name: ~/Documents/py_workspace/llm_model_file/Qwen2.5-7B
+  revision: main
+  method: qlora
+  precision: auto
+data:
+  processed_dir: data/processed
+training:
+  device: cuda
+  output_root: outputs
+  seed: 42
+  epochs: 3
+  max_steps: -1
+  batch_size: 1
+  gradient_accumulation_steps: 16
+  learning_rate: 0.0002
+  warmup_ratio: 0.03
+  max_length: 2048
+  logging_steps: 10
+  gradient_checkpointing: true
+lora:
+  r: 16
+  alpha: 32
+  dropout: 0.05
+  target_modules: [q_proj, k_proj, v_proj, o_proj, gate_proj, up_proj, down_proj]
+generation:
+  max_new_tokens: 1536
+wandb:
+  project: tcm-ner
+  mode: online
+  # 可填写所属团队；空值使用当前账户默认设置。
+  entity: null

@@ -1,0 +1,20 @@
+# 使用已安装的开发依赖，避免钩子额外创建深度学习环境。
+repos:
+  - repo: local
+    hooks:
+      - id: ruff-check
+        name: Python 静态规范检查
+        entry: .venv/bin/python -m ruff check
+        language: system
+        types: [python]
+      - id: ruff-format
+        name: Python 格式检查
+        entry: .venv/bin/python -m ruff format --check
+        language: system
+        types: [python]
+      - id: mypy
+        name: Python 类型检查
+        entry: .venv/bin/python -m mypy
+        language: system
+        pass_filenames: false
+        types: [python]

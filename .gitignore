@@ -208,8 +208,8 @@ tempCodeRunnerFile.py
 # 本项目运行产物
 .DS_Store
 # data/processed/
-outputs/
-events.out.tfevents.*
+# outputs/
+# events.out.tfevents.*
 .superpowers/
 
 # Ruff stuff:

@@ -51,6 +51,9 @@ CUDA_VISIBLE_DEVICES=0 python train.py --run-name smoke-qwen25 \
   --train-limit 32 --eval-limit 4 --max-steps 2
 
 CUDA_VISIBLE_DEVICES=0 python train.py --run-name qwen25-qlora-01
+
+CUDA_VISIBLE_DEVICES=0 python train.py --run-name qwen25-qlora-b8-a2-g8 \
+  --batch-size 8 --gradient-accumulation-steps 2 --generation-batch-size 8
 ```
 
 每次实验使用独立目录 `outputs/<run-name>/`，不允许覆盖已有目录。小规模检查只使用部分数据，不能作为正式评估结果。

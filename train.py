@@ -200,6 +200,7 @@ def _create_trainer(
     args = TrainingArguments(
         output_dir=str(directory),
         run_name=run_name,
+        group_by_length=True,
         per_device_train_batch_size=training["batch_size"],
         per_device_eval_batch_size=training.get("eval_batch_size", 1),
         gradient_accumulation_steps=training["gradient_accumulation_steps"],
@@ -345,6 +346,9 @@ def main() -> None:
     parser.add_argument("--run-name", help="实验名称，不能复用已有输出目录")
     parser.add_argument("--train-limit", type=int, help="仅取前 N 条训练数据，供贯通检查")
     parser.add_argument("--eval-limit", type=int, help="仅取前 N 条验证数据，供贯通检查")
+    parser.add_argument("--batch-size", type=int, help="覆盖单卡训练批大小")
+    parser.add_argument("--gradient-accumulation-steps", type=int, help="覆盖梯度累积步数")
+    parser.add_argument("--generation-batch-size", type=int, help="覆盖验证生成批大小")
     parser.add_argument("--max-steps", type=int, help="覆盖优化器步数，正数用于贯通检查")
     parser.add_argument(
         "--tensorboard",
@@ -353,6 +357,12 @@ def main() -> None:
     )
     args = parser.parse_args()
     config = load_config(args.config)
+    if args.batch_size is not None:
+        config["training"]["batch_size"] = args.batch_size
+    if args.gradient_accumulation_steps is not None:
+        config["training"]["gradient_accumulation_steps"] = args.gradient_accumulation_steps
+    if args.generation_batch_size is not None:
+        config["generation"]["batch_size"] = args.generation_batch_size
     if args.max_steps is not None:
         config["training"]["max_steps"] = args.max_steps
     if args.tensorboard is not None:

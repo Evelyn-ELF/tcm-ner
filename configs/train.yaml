@@ -1,6 +1,6 @@
 # 相对路径以执行命令的当前目录为基准，建议从项目根目录运行。
 model:
-  name: ~/Documents/py_workspace/llm_model_file/Qwen2.5-7B
+  name: /mnt/Qwen2.5-7B
   revision: main
   method: qlora
   precision: auto

@@ -209,7 +209,7 @@ tempCodeRunnerFile.py
 .DS_Store
 # data/processed/
 outputs/
-wandb/
+events.out.tfevents.*
 .superpowers/
 
 # Ruff stuff:

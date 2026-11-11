@@ -17,8 +17,6 @@ jobs:
       TOKENIZERS_PARALLELISM: "false"
       HF_HUB_OFFLINE: "1"
       TRANSFORMERS_OFFLINE: "1"
-      WANDB_MODE: offline
-      WANDB_ERROR_REPORTING: "false"
     steps:
       - name: 检出代码
         uses: actions/checkout@v4

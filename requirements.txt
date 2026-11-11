@@ -4,5 +4,5 @@ transformers==4.57.1
 peft==0.17.1
 accelerate==1.10.1
 bitsandbytes==0.48.1; sys_platform == "linux"
-wandb==0.22.3
+tensorboard==2.20.0
 PyYAML==6.0.3

@@ -275,7 +275,7 @@ def score_predictions(records: Sequence[Mapping[str, Any]]) -> MetricsReport:
 
 
 def flatten_metrics(report: MetricsReport, prefix: str = "eval") -> dict[str, float | int]:
-    """将嵌套计分报告转换为 Trainer 和 W&B 使用的标量指标。"""
+    """将嵌套计分报告转换为 Trainer 和 TensorBoard 使用的标量指标。"""
     values = {
         f"{prefix}_entity_micro_f1": report["micro"]["f1"],
         f"{prefix}_entity_macro_f1": report["macro_f1"],

@@ -28,9 +28,9 @@ def main() -> None:
     parser.add_argument("--dev-data", help="可选的完整验证 JSONL，用于补充排除重合文本的报告")
     parser.add_argument("--output-dir", required=True, help="报告目录")
     parser.add_argument("--device", choices=["cuda", "cpu"], default="cuda", help="模型运行设备")
-    parser.add_argument("--wandb-run-id", help="可选：将最终测试聚合指标写回原训练 run")
-    parser.add_argument("--wandb-project", default="tcm-ner")
-    parser.add_argument("--wandb-entity", help="原训练 run 所属团队")
+    parser.add_argument(
+        "--tensorboard-log-dir", type=Path, help="可选：写入测试集聚合指标的 TensorBoard 目录"
+    )
     args = parser.parse_args()
     records: Sequence[Mapping[str, Any]]
     overlap_texts = None
@@ -88,23 +88,12 @@ def main() -> None:
         print(
             f"排除验证原文重合 {len(records) - len(filtered)} 条后的 Micro-F1：{extra['micro']['f1']:.4f}"
         )
-    if args.wandb_run_id:
-        import wandb
+    if args.tensorboard_log_dir is not None:
+        from torch.utils.tensorboard import SummaryWriter
 
-        # 本地报告已落盘；恢复原训练 run，仅提交聚合指标，不上传预测原文。
-        with wandb.init(
-            project=args.wandb_project,
-            entity=args.wandb_entity,
-            id=args.wandb_run_id,
-            resume="must",
-            job_type="test",
-        ) as run:
-            run.summary.update(
-                {
-                    k.replace("test_", "test/", 1): v
-                    for k, v in flatten_metrics(report, "test").items()
-                }
-            )
+        with SummaryWriter(log_dir=str(args.tensorboard_log_dir)) as writer:
+            for key, value in flatten_metrics(report, "test").items():
+                writer.add_scalar(key.replace("test_", "test/", 1), value, global_step=0)
 
 
 if __name__ == "__main__":

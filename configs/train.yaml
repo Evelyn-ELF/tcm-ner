@@ -26,8 +26,5 @@ lora:
   target_modules: [q_proj, k_proj, v_proj, o_proj, gate_proj, up_proj, down_proj]
 generation:
   max_new_tokens: 1536
-wandb:
-  project: tcm-ner
-  mode: online
-  # 可填写所属团队；空值使用当前账户默认设置。
-  entity: null
+tensorboard:
+  enabled: true

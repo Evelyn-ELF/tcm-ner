@@ -6,7 +6,6 @@ import argparse
 import hashlib
 import importlib.metadata
 import json
-import os
 import platform
 import shutil
 import uuid
@@ -38,7 +37,7 @@ def load_config(path: str | Path) -> dict[str, Any]:
         config = yaml.safe_load(stream)
     if not isinstance(config, dict):
         raise ValueError("配置必须是 YAML 对象")
-    required = {"model", "data", "training", "lora", "generation", "wandb"}
+    required = {"model", "data", "training", "lora", "generation", "tensorboard"}
     if set(config) != required:
         raise ValueError(f"配置顶层字段必须为 {sorted(required)}")
     for key in required:
@@ -50,7 +49,7 @@ def load_config(path: str | Path) -> dict[str, Any]:
 def _environment() -> dict[str, Any]:
     import torch
 
-    names = ["torch", "transformers", "peft", "accelerate", "wandb", "PyYAML"]
+    names = ["torch", "transformers", "peft", "accelerate", "tensorboard", "PyYAML"]
     if torch.cuda.is_available():
         names.append("bitsandbytes")
     return {
@@ -74,9 +73,8 @@ def _validate_training_config(config: dict[str, Any]) -> None:
             raise ValueError(f"training.{key} 必须为正整数")
     if training["epochs"] <= 0 or config["generation"]["max_new_tokens"] <= 0:
         raise ValueError("训练轮数及生成长度必须为正数")
-    mode = config["wandb"]["mode"]
-    if mode not in ("online", "offline", "disabled"):
-        raise ValueError("W&B mode 应为 online/offline/disabled")
+    if not isinstance(config["tensorboard"].get("enabled"), bool):
+        raise ValueError("tensorboard.enabled 应为布尔值")
 
 
 def _create_run_directory(config: dict[str, Any], run_name: str | None) -> tuple[Path, str]:
@@ -155,7 +153,7 @@ def _save_environment(
     lengths: dict[str, dict[str, int]],
     train_limit: int | None,
     eval_limit: int | None,
-) -> dict[str, Any]:
+) -> None:
     training = config["training"]
     environment = _environment()
     data_hashes = {
@@ -164,6 +162,7 @@ def _save_environment(
         if (processed / f"{split}.jsonl").exists()
     }
     metadata = {
+        "config": config,
         "environment": environment,
         "data_sha256": data_hashes,
         "token_lengths": lengths,
@@ -174,31 +173,6 @@ def _save_environment(
     }
     write_json(directory / "environment.json", metadata)
     print(f"训练目录：{directory.resolve()}；长度统计：{json.dumps(lengths, ensure_ascii=False)}")
-    return metadata
-
-
-def _start_monitoring(
-    config: dict[str, Any], directory: Path, run_name: str, metadata: dict[str, Any]
-) -> Any:
-    import wandb
-
-    mode = config["wandb"]["mode"]
-    # run 由此处初始化一次，Trainer 的集成会复用它；不上传原文和模型权重。
-    os.environ["WANDB_PROJECT"] = config["wandb"]["project"]
-    os.environ["WANDB_LOG_MODEL"] = "false"
-    os.environ["WANDB_WATCH"] = "false"
-    os.environ["WANDB_DISABLE_CODE"] = "true"
-    os.environ.pop("WANDB_DISABLED", None)
-    run = wandb.init(
-        project=config["wandb"]["project"],
-        entity=config["wandb"].get("entity"),
-        name=run_name,
-        dir=str(directory.resolve()),
-        mode=mode,
-        config={**config, "runtime": metadata},
-        save_code=False,
-    )
-    return run
 
 
 def _create_trainer(
@@ -218,7 +192,6 @@ def _create_trainer(
     from ner_trainer import EntityTrainer
 
     training = config["training"]
-    mode = config["wandb"]["mode"]
     max_new = config["generation"]["max_new_tokens"]
     args = TrainingArguments(
         output_dir=str(directory),
@@ -248,7 +221,8 @@ def _create_trainer(
         use_cpu=device.type == "cpu",
         seed=training["seed"],
         data_seed=training["seed"],
-        report_to="wandb" if mode != "disabled" else "none",
+        logging_dir=str(directory / "tensorboard"),
+        report_to="tensorboard" if config["tensorboard"]["enabled"] else "none",
         label_names=["labels"],
         prediction_loss_only=True,
         dataloader_pin_memory=device.type == "cuda",
@@ -281,7 +255,6 @@ def _save_training_result(
     samples: dict[str, list[Sample]],
     eos_id: int,
     result: Any,
-    run: Any,
     train_limit: int | None,
     eval_limit: int | None,
 ) -> None:
@@ -292,7 +265,7 @@ def _save_training_result(
     trainer.save_model(str(adapter))
     tokenizer.save_pretrained(adapter)
     save_runtime_metadata(adapter, config, trainer.model, eos_id)
-    # 保留验证原文用于最终重合补充评估，不含标签，也不上报 W&B。
+    # 保留验证原文用于最终重合补充评估，不含标签。
     write_json(
         adapter / "validation_texts.json",
         sorted({row["input"] for row in samples["dev"]}),
@@ -304,19 +277,14 @@ def _save_training_result(
         "best_adapter": str(adapter.resolve()),
         "global_step": trainer.state.global_step,
         "training_metrics": result.metrics,
-        "wandb_run_id": run.id,
+        "tensorboard_log_dir": str((directory / "tensorboard").resolve())
+        if config["tensorboard"]["enabled"]
+        else None,
         "smoke_test": train_limit is not None
         or eval_limit is not None
         or training["max_steps"] > 0,
     }
     write_json(directory / "summary.json", summary)
-    run.summary.update(
-        {
-            "best_validation_f1": trainer.state.best_metric,
-            "best_checkpoint": trainer.state.best_model_checkpoint,
-            "best_adapter": str(adapter.resolve()),
-        }
-    )
     print(f"最佳验证实体 Micro-F1：{trainer.state.best_metric:.4f}；adapter：{adapter.resolve()}")
 
 
@@ -330,9 +298,8 @@ def run_training(
 
     config 为完整训练配置；样本限制仅用于贯通检查，必须为正数。
     输入、长度或设备不合法时抛出 ValueError，目录已存在时抛出 FileExistsError。
-    训练异常继续向调用方传播，并在监控初始化成功后保证关闭 W&B。
+    训练异常继续向调用方传播。
     """
-    import wandb
     from transformers import set_seed
 
     _validate_training_config(config)
@@ -347,29 +314,22 @@ def run_training(
     eos_id = eos[0] if isinstance(eos, list) else eos
     features, lengths = _encode_training_samples(config, samples, tokenizer, eos_id, model)
     model = add_lora(model, config)
-    metadata = _save_environment(
-        config, directory, processed, model, lengths, train_limit, eval_limit
+    _save_environment(config, directory, processed, model, lengths, train_limit, eval_limit)
+    trainer = _create_trainer(
+        config, directory, run_name, model, tokenizer, device, dtype, features, samples
     )
-    run = _start_monitoring(config, directory, run_name, metadata)
-    try:
-        trainer = _create_trainer(
-            config, directory, run_name, model, tokenizer, device, dtype, features, samples
-        )
-        result = trainer.train()
-        _save_training_result(
-            config,
-            directory,
-            trainer,
-            tokenizer,
-            samples,
-            eos_id,
-            result,
-            run,
-            train_limit,
-            eval_limit,
-        )
-    finally:
-        wandb.finish()
+    result = trainer.train()
+    _save_training_result(
+        config,
+        directory,
+        trainer,
+        tokenizer,
+        samples,
+        eos_id,
+        result,
+        train_limit,
+        eval_limit,
+    )
     return directory
 
 
@@ -382,14 +342,16 @@ def main() -> None:
     parser.add_argument("--eval-limit", type=int, help="仅取前 N 条验证数据，供贯通检查")
     parser.add_argument("--max-steps", type=int, help="覆盖优化器步数，正数用于贯通检查")
     parser.add_argument(
-        "--wandb-mode", choices=["online", "offline", "disabled"], help="覆盖 W&B 模式"
+        "--tensorboard",
+        action=argparse.BooleanOptionalAction,
+        help="启用或关闭 TensorBoard 日志",
     )
     args = parser.parse_args()
     config = load_config(args.config)
     if args.max_steps is not None:
         config["training"]["max_steps"] = args.max_steps
-    if args.wandb_mode:
-        config["wandb"]["mode"] = args.wandb_mode
+    if args.tensorboard is not None:
+        config["tensorboard"]["enabled"] = args.tensorboard
     run_training(config, args.run_name, args.train_limit, args.eval_limit)
 
 

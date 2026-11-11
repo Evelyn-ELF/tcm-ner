@@ -42,11 +42,9 @@ python prepare_data.py
 
 ## 3. 训练
 
-默认使用 W&B 在线记录实验。先登录，再进行小规模检查，最后运行完整训练：
+默认使用 TensorBoard 在本地记录实验。先进行小规模检查，再运行完整训练：
 
 ```bash
-wandb login
-
 CUDA_VISIBLE_DEVICES=0 python train.py --run-name smoke-qwen25 \
   --train-limit 32 --eval-limit 4 --max-steps 2
 
@@ -57,15 +55,13 @@ CUDA_VISIBLE_DEVICES=0 python train.py --run-name qwen25-qlora-01
 
 超参数集中在 [configs/train.yaml](configs/train.yaml)，用 `--config` 指定其他配置。默认每个 epoch 生成验证集答案，按实体 Micro-F1 选择最佳 checkpoint；训练结束后保存到 `best_adapter/`。
 
-离线记录可使用：
+训练日志位于 `outputs/<run-name>/tensorboard/`。在项目根目录运行以下命令查看：
 
 ```bash
-CUDA_VISIBLE_DEVICES=0 python train.py --run-name qwen25-offline-01 --wandb-mode offline
-# 联网后同步本地日志：
-wandb sync outputs/qwen25-offline-01/wandb/offline-run-*
+tensorboard --logdir outputs
 ```
 
-离线模式只关闭 W&B 云端通信，仍需本地 socket 权限和可用的模型文件。完全关闭监控用 `--wandb-mode disabled`。程序显式读取配置或命令行模式，不能仅靠 `WANDB_MODE` 环境变量切换。
+使用 `--no-tensorboard` 关闭事件日志，或在配置中设置 `tensorboard.enabled: false`。
 
 ## 4. 评估测试集
 
@@ -80,7 +76,7 @@ CUDA_VISIBLE_DEVICES=0 python evaluate.py \
 
 命令打印全部 10 类的 Precision、Recall、F1 和实体计数，保存原始预测及 JSON/CSV 报告。adapter 内保存了实际验证原文，程序据此额外生成排除验证重合文本后的测试报告；也可用 `--dev-data data/processed/dev.jsonl` 覆盖这份清单。
 
-评估默认仅保存本地结果。需要写回 W&B 原训练 run 时，在命令后添加 `--wandb-run-id <run-id> --wandb-project tcm-ner`，团队账户还需 `--wandb-entity <团队名>`。run ID 见 `summary.json`；离线 run 必须先同步。
+评估默认仅保存本地报告。添加 `--tensorboard-log-dir outputs/<run-name>/tensorboard` 可将聚合指标写入对应实验。目录也可从 `summary.json` 的 `tensorboard_log_dir` 字段获取。
 
 重新计算已保存预测的指标，不需要加载模型：
 
@@ -115,7 +111,7 @@ adapter 仍依赖原始基座。使用本地基座时，`best_adapter/runtime.js
 | `checkpoint-*/` | 训练 checkpoint |
 | `validation/step-*/` | 每次验证的原始预测和报告 |
 | `best_adapter/` | 最佳 LoRA 权重、tokenizer 和运行元数据 |
-| `trainer_state.json`、`summary.json` | 训练状态、最佳验证指标及 W&B run ID |
+| `trainer_state.json`、`summary.json` | 训练状态、最佳验证指标及 TensorBoard 日志目录 |
 | `test_predictions.jsonl`、`test_metrics.{json,csv}` | 单独运行评估后生成的预测与主报告 |
 | `test_without_dev_overlap_metrics.{json,csv}` | 有验证原文来源时生成的补充报告 |
 

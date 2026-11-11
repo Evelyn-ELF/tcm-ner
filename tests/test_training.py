@@ -106,7 +106,7 @@ class TrainingTests(unittest.TestCase):
                 logging_steps=1,
             )
             config["generation"]["max_new_tokens"] = 128
-            config["wandb"]["mode"] = "offline"
+            config["tensorboard"]["enabled"] = True
             run_dir = run_training(config, run_name="贯通测试")
             adapter = run_dir / "best_adapter"
             self.assertTrue((adapter / "adapter_model.safetensors").exists())
@@ -115,7 +115,7 @@ class TrainingTests(unittest.TestCase):
             self.assertEqual(summary["best_validation_f1"], 0.0)
             self.assertIsNotNone(summary["best_checkpoint"])
             self.assertEqual(len(list(run_dir.glob("validation/step-*/eval_metrics.json"))), 1)
-            self.assertTrue(list((run_dir / "wandb").glob("offline-run-*")))
+            self.assertTrue(list((run_dir / "tensorboard").glob("events.out.tfevents.*")))
             eval_dir = root / "evaluation"
             env = {
                 **os.environ,
@@ -131,6 +131,8 @@ class TrainingTests(unittest.TestCase):
                 str(processed / "test.jsonl"),
                 "--output-dir",
                 str(eval_dir),
+                "--tensorboard-log-dir",
+                summary["tensorboard_log_dir"],
                 "--device",
                 "cpu",
             ]
@@ -138,6 +140,12 @@ class TrainingTests(unittest.TestCase):
                 command, cwd=ROOT, env=env, text=True, capture_output=True, timeout=90
             )
             self.assertEqual(result.returncode, 0, result.stdout + result.stderr)
+            from tensorboard.backend.event_processing.event_accumulator import EventAccumulator
+
+            events = EventAccumulator(summary["tensorboard_log_dir"]).Reload()
+            self.assertIn("train/loss", events.Tags()["scalars"])
+            self.assertIn("eval/entity_micro_f1", events.Tags()["scalars"])
+            self.assertIn("test/entity_micro_f1", events.Tags()["scalars"])
             report = json.loads((eval_dir / "test_metrics.json").read_text())
             self.assertEqual(report["sample_count"], 1)
             self.assertEqual(len(report["per_type"]), 10)

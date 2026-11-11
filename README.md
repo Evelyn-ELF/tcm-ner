@@ -24,7 +24,7 @@ python -m pip install torch==2.6.0 --index-url https://download.pytorch.org/whl/
 python -m pip install -r requirements.txt
 ```
 
-首次加载 `Qwen/Qwen2.5-7B` 需要下载模型。也可以提前准备基座文件，将 [训练配置](configs/train.yaml) 中的 `model.name` 改为本地目录。
+[训练配置](configs/train.yaml) 默认从 `/mnt/Qwen2.5-7B` 加载模型。按实际位置修改 `model.name`，也可填写 `Qwen/Qwen2.5-7B` 以下载模型。
 
 默认配置使用 QLoRA；普通 LoRA 可设置 `model.method: lora`。显存是否足够，需要在目标 GPU 上通过短训练确认。
 
@@ -41,6 +41,8 @@ python prepare_data.py
 当前处理后训练／验证／测试为 **5174／657／658 条**。详细统计和数据局限见[验证记录](docs/开发验证记录.md)。
 
 ## 3. 训练
+
+默认每次训练处理 4 条样本，累积 4 次梯度后更新参数，单卡有效批大小为 16。每轮验证先用 `training.eval_batch_size` 分批计算损失，再用 `generation.batch_size` 分批生成预测，两个批大小默认均为 4。生成上限由 `generation.max_new_tokens` 控制，默认每条 1536 个 token。
 
 默认使用 TensorBoard 在本地记录实验。先进行小规模检查，再运行完整训练：
 
@@ -71,10 +73,11 @@ tensorboard --logdir outputs
 CUDA_VISIBLE_DEVICES=0 python evaluate.py \
   --adapter outputs/qwen25-qlora-01/best_adapter \
   --data data/processed/test.jsonl \
+  --batch-size 4 \
   --output-dir outputs/qwen25-qlora-01
 ```
 
-命令打印全部 10 类的 Precision、Recall、F1 和实体计数，保存原始预测及 JSON/CSV 报告。adapter 内保存了实际验证原文，程序据此额外生成排除验证重合文本后的测试报告；也可用 `--dev-data data/processed/dev.jsonl` 覆盖这份清单。
+测试集生成默认每批 4 条，可通过 `--batch-size` 调整。命令打印全部 10 类的 Precision、Recall、F1 和实体计数，保存原始预测及 JSON/CSV 报告。adapter 内保存了实际验证原文，程序据此额外生成排除验证重合文本后的测试报告；也可用 `--dev-data data/processed/dev.jsonl` 覆盖这份清单。
 
 评估默认仅保存本地报告。添加 `--tensorboard-log-dir outputs/<run-name>/tensorboard` 可将聚合指标写入对应实验。目录也可从 `summary.json` 的 `tensorboard_log_dir` 字段获取。
 

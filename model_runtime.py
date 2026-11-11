@@ -95,7 +95,7 @@ def load_base_model(
         raise ValueError("QLoRA 需要 CUDA；微型 CPU 测试请设置 method: lora")
     kwargs = {"revision": model_config.get("revision"), "trust_remote_code": False}
     tokenizer = AutoTokenizer.from_pretrained(model_config["name"], **kwargs)
-    loading = {"torch_dtype": dtype, "attn_implementation": "sdpa", **kwargs}
+    loading = {"dtype": dtype, "attn_implementation": "sdpa", **kwargs}
     if method == "qlora":
         loading["quantization_config"] = BitsAndBytesConfig(
             load_in_4bit=True,

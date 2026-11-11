@@ -71,6 +71,10 @@ def _validate_training_config(config: dict[str, Any]) -> None:
     ):
         if type(training[key]) is not int or training[key] <= 0:
             raise ValueError(f"training.{key} 必须为正整数")
+    for section, key in (("training", "eval_batch_size"), ("generation", "batch_size")):
+        value = config[section].get(key, 1)
+        if type(value) is not int or value <= 0:
+            raise ValueError(f"{section}.{key} 必须为正整数")
     if training["epochs"] <= 0 or config["generation"]["max_new_tokens"] <= 0:
         raise ValueError("训练轮数及生成长度必须为正数")
     if not isinstance(config["tensorboard"].get("enabled"), bool):
@@ -197,7 +201,7 @@ def _create_trainer(
         output_dir=str(directory),
         run_name=run_name,
         per_device_train_batch_size=training["batch_size"],
-        per_device_eval_batch_size=1,
+        per_device_eval_batch_size=training.get("eval_batch_size", 1),
         gradient_accumulation_steps=training["gradient_accumulation_steps"],
         learning_rate=training["learning_rate"],
         num_train_epochs=training["epochs"],
@@ -243,6 +247,7 @@ def _create_trainer(
         raw_eval_samples=samples["dev"],
         ner_max_length=training["max_length"],
         ner_max_new_tokens=max_new,
+        ner_generation_batch_size=config["generation"].get("batch_size", 1),
     )
     return trainer
 

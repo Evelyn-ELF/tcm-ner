@@ -161,63 +161,72 @@ def generate_records(
     max_length: int,
     max_new_tokens: int,
     progress: bool = False,
+    batch_size: int = 1,
 ) -> list[Prediction]:
-    """逐条确定性生成并保留原始输出，不将真实标签放入提示。
+    """分批确定性生成并保留原始输出，不将真实标签放入提示。
 
     提示与生成预算超出上下文时抛出 ValueError；结束或异常时恢复模型模式。
     """
     import torch
 
+    if type(batch_size) is not int or batch_size < 1:
+        raise ValueError("生成批大小必须为正整数")
     device = next(model.parameters()).device
     eos = model.generation_config.eos_token_id
     eos_ids = eos if isinstance(eos, list) else [eos]
+    context_limit = min(max_length, getattr(model.config, "max_position_embeddings", max_length))
     was_training = model.training
+    padding_side = tokenizer.padding_side
     records: list[Prediction] = []
     model.eval()
+    tokenizer.padding_side = "left"
     try:
         with torch.inference_mode():
-            for index, sample in enumerate(samples):
-                prompt = tokenizer(
-                    build_prompt(sample), add_special_tokens=False, return_tensors="pt"
+            for start in range(0, len(samples), batch_size):
+                batch = samples[start : start + batch_size]
+                prompts = tokenizer(
+                    [build_prompt(sample) for sample in batch],
+                    add_special_tokens=False,
+                    padding=True,
+                    return_tensors="pt",
                 )
-                prompt = {
-                    key: value.to(device)
-                    for key, value in prompt.items()
-                    if key in ("input_ids", "attention_mask")
-                }
-                n = prompt["input_ids"].shape[1]
-                context_limit = min(
-                    max_length,
-                    getattr(model.config, "max_position_embeddings", max_length),
-                )
-                if n + max_new_tokens > context_limit:
-                    raise ValueError(
-                        f"{sample['id']} 的提示+生成预算 {n + max_new_tokens} 超过上下文 {context_limit}，请调整长度配置"
-                    )
-                output = model.generate(
-                    **prompt,
+                for sample, length in zip(
+                    batch, prompts["attention_mask"].sum(dim=1).tolist(), strict=True
+                ):
+                    if length + max_new_tokens > context_limit:
+                        raise ValueError(
+                            f"{sample['id']} 的提示+生成预算 {length + max_new_tokens} "
+                            f"超过上下文 {context_limit}，请调整长度配置"
+                        )
+                width = prompts["input_ids"].shape[1]
+                outputs = model.generate(
+                    input_ids=prompts["input_ids"].to(device),
+                    attention_mask=prompts["attention_mask"].to(device),
                     max_new_tokens=max_new_tokens,
                     do_sample=False,
                     eos_token_id=eos_ids,
                     pad_token_id=tokenizer.pad_token_id,
                     use_cache=True,
-                )[0, n:].tolist()
-                raw = tokenizer.decode(output, skip_special_tokens=True)
-                parsed = parse_prediction(sample["input"], raw)
-                records.append(
-                    {
-                        **sample,
-                        "raw_output": raw,
-                        "predicted_entities": parsed["entities"],
-                        "parse_error": parsed["parse_error"],
-                        "item_errors": parsed["errors"],
-                        "hit_generation_limit": len(output) >= max_new_tokens
-                        and output[-1] not in eos_ids,
-                    }
-                )
-                if progress and (index + 1) % 50 == 0:
-                    print(f"已生成 {index + 1}/{len(samples)} 条", flush=True)
+                )[:, width:].tolist()
+                for sample, output in zip(batch, outputs, strict=True):
+                    # 已结束的样本会补齐到批内最长输出，只保留首个结束符之前的内容。
+                    end = next((i for i, token in enumerate(output) if token in eos_ids), None)
+                    raw = tokenizer.decode(output[:end], skip_special_tokens=True)
+                    parsed = parse_prediction(sample["input"], raw)
+                    records.append(
+                        {
+                            **sample,
+                            "raw_output": raw,
+                            "predicted_entities": parsed["entities"],
+                            "parse_error": parsed["parse_error"],
+                            "item_errors": parsed["errors"],
+                            "hit_generation_limit": end is None and len(output) >= max_new_tokens,
+                        }
+                    )
+                if progress and (start // 50 != len(records) // 50 or len(records) == len(samples)):
+                    print(f"已生成 {len(records)}/{len(samples)} 条", flush=True)
     finally:
+        tokenizer.padding_side = padding_side
         model.train(was_training)
     return records
 

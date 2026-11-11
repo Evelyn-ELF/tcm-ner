@@ -26,6 +26,7 @@ class EntityTrainer(Trainer):
         raw_eval_samples: list[Sample],
         ner_max_length: int,
         ner_max_new_tokens: int,
+        ner_generation_batch_size: int = 1,
         **kwargs: Any,
     ) -> None:
         """接收 Trainer 参数及完整验证样本、上下文和生成预算。"""
@@ -33,6 +34,7 @@ class EntityTrainer(Trainer):
         self.raw_eval_samples = raw_eval_samples
         self.ner_max_length = ner_max_length
         self.ner_max_new_tokens = ner_max_new_tokens
+        self.ner_generation_batch_size = ner_generation_batch_size
 
     def evaluation_loop(
         self,
@@ -58,6 +60,7 @@ class EntityTrainer(Trainer):
             self.ner_max_length,
             self.ner_max_new_tokens,
             progress=True,
+            batch_size=self.ner_generation_batch_size,
         )
         report = score_predictions(records)
         directory = (

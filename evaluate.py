@@ -31,6 +31,7 @@ def main() -> None:
     parser.add_argument(
         "--tensorboard-log-dir", type=Path, help="可选：写入测试集聚合指标的 TensorBoard 目录"
     )
+    parser.add_argument("--batch-size", type=int, default=4, help="测试集生成批大小")
     args = parser.parse_args()
     records: Sequence[Mapping[str, Any]]
     overlap_texts = None
@@ -66,6 +67,7 @@ def main() -> None:
             metadata["max_length"],
             metadata["generation"]["max_new_tokens"],
             progress=True,
+            batch_size=args.batch_size,
         )
         overlap_file = Path(args.adapter) / "validation_texts.json"
         if overlap_file.exists():

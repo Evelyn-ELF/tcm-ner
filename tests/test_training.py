@@ -76,6 +76,10 @@ class TrainingTests(unittest.TestCase):
             ]
             records = generate_records(model, tokenizer, samples, 2048, 8)
             self.assertEqual(records[0]["raw_output"], records[1]["raw_output"])
+            mixed = [samples[0], {"id": "c", "input": "口苦口苦", "output": []}, samples[1]]
+            expected = generate_records(model, tokenizer, mixed, 2048, 8)
+            actual = generate_records(model, tokenizer, mixed, 2048, 8, batch_size=2)
+            self.assertEqual(actual, expected)
             self.assertTrue(model.training)
             with self.assertRaisesRegex(ValueError, "上下文"):
                 generate_records(model, tokenizer, samples, 10, 8)

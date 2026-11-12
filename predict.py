@@ -22,6 +22,7 @@ def main() -> None:
         [{"id": "predict-1", "input": args.text}],
         metadata["max_length"],
         metadata["generation"]["max_new_tokens"],
+        instruction=metadata["instruction"],
     )[0]
     print(
         json.dumps(

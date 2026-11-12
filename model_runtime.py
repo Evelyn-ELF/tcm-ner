@@ -16,6 +16,8 @@ if TYPE_CHECKING:
 from ner_utils import (
     INSTRUCTION,
     LABELS,
+    LEGACY_INSTRUCTION,
+    LEGACY_TEMPLATE_VERSION,
     TEMPLATE_VERSION,
     build_prompt,
     parse_prediction,
@@ -26,7 +28,12 @@ from ner_utils import (
 def encode_sample(sample: Sample, tokenizer: Any, eos_id: int, max_length: int) -> EncodedSample:
     """编码提示、答案和 EOS，仅监督答案区；超出 max_length 时抛出 ValueError。"""
     prompt_ids = tokenizer(build_prompt(sample), add_special_tokens=False)["input_ids"]
-    answer = json.dumps(sample["output"], ensure_ascii=False, separators=(",", ":"))
+    mentions = dict.fromkeys((entity["text"], entity["type"]) for entity in sample["output"])
+    answer = json.dumps(
+        [{"text": text, "type": kind} for text, kind in mentions],
+        ensure_ascii=False,
+        separators=(",", ":"),
+    )
     answer_ids = tokenizer(answer, add_special_tokens=False)["input_ids"] + [eos_id]
     ids = prompt_ids + answer_ids
     if len(ids) > max_length:
@@ -162,6 +169,8 @@ def generate_records(
     max_new_tokens: int,
     progress: bool = False,
     batch_size: int = 1,
+    instruction: str = INSTRUCTION,
+    guidance: str = "",
 ) -> list[Prediction]:
     """分批确定性生成并保留原始输出，不将真实标签放入提示。
 
@@ -185,7 +194,7 @@ def generate_records(
             for start in range(0, len(samples), batch_size):
                 batch = samples[start : start + batch_size]
                 prompts = tokenizer(
-                    [build_prompt(sample) for sample in batch],
+                    [build_prompt(sample, instruction, guidance) for sample in batch],
                     add_special_tokens=False,
                     padding=True,
                     return_tensors="pt",
@@ -266,11 +275,10 @@ def load_adapter(adapter_path: str | Path, device_name: str) -> tuple[Any, Any, 
 
     path = Path(adapter_path)
     meta = json.loads((path / "runtime.json").read_text(encoding="utf-8"))
-    if (
-        meta["template_version"] != TEMPLATE_VERSION
-        or meta["instruction"] != INSTRUCTION
-        or meta["labels"] != list(LABELS)
-    ):
+    if (meta["template_version"], meta["instruction"]) not in (
+        (TEMPLATE_VERSION, INSTRUCTION),
+        (LEGACY_TEMPLATE_VERSION, LEGACY_INSTRUCTION),
+    ) or meta["labels"] != list(LABELS):
         raise ValueError("adapter 的模板或类别版本不一致")
     model, _, _, _ = load_base_model(meta["model"], device_name)
     tokenizer = AutoTokenizer.from_pretrained(path, trust_remote_code=False)

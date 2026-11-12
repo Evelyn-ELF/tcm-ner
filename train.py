@@ -96,13 +96,21 @@ def _load_training_samples(
     config: dict[str, Any], directory: Path, train_limit: int | None, eval_limit: int | None
 ) -> tuple[Path, dict[str, list[Sample]]]:
     processed = Path(config["data"]["processed_dir"])
-    samples = {split: read_jsonl(processed / f"{split}.jsonl") for split in ("train", "dev")}
+    samples = {
+        split: read_jsonl(processed / f"{split}.jsonl") for split in ("train", "dev", "test")
+    }
     for split, rows in samples.items():
         validate_samples(rows)
         if not rows:
             raise ValueError(f"{split} 数据为空")
-    if {s["input"] for s in samples["train"]} & {s["input"] for s in samples["dev"]}:
-        raise ValueError("训练和验证集存在相同原文，请重新运行 prepare_data.py")
+    texts = {split: {row["input"] for row in rows} for split, rows in samples.items()}
+    for left, right in (("train", "dev"), ("train", "test"), ("dev", "test")):
+        overlap = texts[left] & texts[right]
+        if overlap:
+            raise ValueError(
+                f"{left} 和 {right} 有 {len(overlap)} 条相同原文，请重新运行 prepare_data.py"
+            )
+    del samples["test"]
     for split, limit in (("train", train_limit), ("dev", eval_limit)):
         if limit is not None:
             if limit <= 0:
@@ -258,7 +266,6 @@ def _save_training_result(
     directory: Path,
     trainer: EntityTrainer,
     tokenizer: Any,
-    samples: dict[str, list[Sample]],
     eos_id: int,
     result: Any,
     train_limit: int | None,
@@ -271,11 +278,6 @@ def _save_training_result(
     trainer.save_model(str(adapter))
     tokenizer.save_pretrained(adapter)
     save_runtime_metadata(adapter, config, trainer.model, eos_id)
-    # 保留验证原文用于最终重合补充评估，不含标签。
-    write_json(
-        adapter / "validation_texts.json",
-        sorted({row["input"] for row in samples["dev"]}),
-    )
     trainer.save_state()
     summary = {
         "best_validation_f1": trainer.state.best_metric,
@@ -330,7 +332,6 @@ def run_training(
         directory,
         trainer,
         tokenizer,
-        samples,
         eos_id,
         result,
         train_limit,

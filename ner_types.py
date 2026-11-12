@@ -87,4 +87,3 @@ class MetricsReport(TypedDict):
     unknown_type_fp: int
     generation_limit_rate: float
     scoring_rule: str
-    excluded_overlap_samples: NotRequired[int]

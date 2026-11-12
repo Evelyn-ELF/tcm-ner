@@ -24,12 +24,17 @@ LABELS = (
     "西医治疗",
     "其他治疗",
 )
-INSTRUCTION = (
+LEGACY_INSTRUCTION = (
     "识别文本中的中医药实体，仅输出JSON数组。允许类别："
     + "、".join(LABELS)
     + "。每个实体包含text、type、start、end；位置从0开始，end不包含在实体内。无实体时输出[]。"
 )
-TEMPLATE_VERSION = "tcm-ner-plain-v1"
+INSTRUCTION = LEGACY_INSTRUCTION.replace(
+    "每个实体包含text、type、start、end；位置从0开始，end不包含在实体内。",
+    "每个实体仅包含text、type；text必须逐字复制原文。同类别的同名实体只输出一次。",
+)
+LEGACY_TEMPLATE_VERSION = "tcm-ner-plain-v1"
+TEMPLATE_VERSION = "tcm-ner-plain-v2"
 
 
 def write_json(path: str | Path, value: object) -> None:
@@ -174,18 +179,19 @@ def read_bio(path: str | Path, split: str) -> list[Sample]:
     return samples
 
 
-def build_prompt(sample: Mapping[str, Any]) -> str:
+def build_prompt(
+    sample: Mapping[str, Any], instruction: str = INSTRUCTION, guidance: str = ""
+) -> str:
     """仅使用原文和固定指令构建提示；指令版本不符时抛出 ValueError。"""
-    instruction = sample.get("instruction", INSTRUCTION)
-    if instruction != INSTRUCTION:
+    if instruction not in (INSTRUCTION, LEGACY_INSTRUCTION):
         raise ValueError("样本 instruction 与当前模板不一致，请重新生成数据")
-    return f"任务：{instruction}\n文本：{sample['input']}\n答案：\n"
+    return f"任务：{instruction}{guidance}\n文本：{sample['input']}\n答案：\n"
 
 
 def parse_prediction(text: str, raw: str) -> ParsedPrediction:
     """解析模型输出并校验实体；JSON 错误返回空实体及 parse_error。
 
-    偏移无效时尝试按唯一原文命中回填。合法实体去重，非法条目按类别累计。
+    按原文首次精确命中计算偏移。合法实体去重，非法条目按类别累计。
     """
     result: ParsedPrediction = {
         "entities": [],
@@ -204,12 +210,11 @@ def parse_prediction(text: str, raw: str) -> ParsedPrediction:
     seen: set[tuple[str, int, int]] = set()
     invalid: Counter[str] = Counter()
     for index, item in enumerate(items):
-        if isinstance(item, dict) and not valid_entity(text, item):
+        if isinstance(item, dict):
             surface = item.get("text")
             if isinstance(surface, str) and surface:
                 start = text.find(surface)
-                if start >= 0 and start == text.rfind(surface):
-                    item = {**item, "start": start, "end": start + len(surface)}
+                item = {**item, "start": start, "end": start + len(surface)}
         if not valid_entity(text, item):
             kind = item.get("type") if isinstance(item, dict) else None
             if isinstance(kind, str) and kind in LABELS:

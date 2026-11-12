@@ -27,7 +27,7 @@ class EvaluationCliTests(unittest.TestCase):
         self.assertEqual(result["micro"]["f1"], 0.5)
         self.assertAlmostEqual(result["macro_f1"], (2 / 3) / 10)
 
-    def test_rescore_uses_authoritative_gold_and_reports_overlap(self):
+    def test_rescore_uses_authoritative_gold_and_writes_final_report(self):
         with tempfile.TemporaryDirectory() as tmp:
             root = Path(tmp)
             gold = {"text": "口苦", "type": "临床表现", "start": 0, "end": 2}
@@ -37,7 +37,6 @@ class EvaluationCliTests(unittest.TestCase):
                 root / "predictions.jsonl",
                 [{"id": "a", "input": "口苦", "output": [], "raw_output": "[]"}],
             )
-            write_jsonl(root / "dev.jsonl", [{"id": "dev-a", "input": "口苦", "output": [gold]}])
             command = [
                 sys.executable,
                 str(ROOT / "evaluate.py"),
@@ -45,8 +44,7 @@ class EvaluationCliTests(unittest.TestCase):
                 str(root / "predictions.jsonl"),
                 "--data",
                 str(root / "data.jsonl"),
-                "--dev-data",
-                str(root / "dev.jsonl"),
+                "--final-report",
                 "--output-dir",
                 str(root / "reports"),
             ]
@@ -54,9 +52,8 @@ class EvaluationCliTests(unittest.TestCase):
             self.assertEqual(result.returncode, 0, result.stderr)
             report = json.loads((root / "reports/test_metrics.json").read_text())
             self.assertEqual(report["micro"]["fn"], 1)
-            extra = json.loads((root / "reports/test_without_dev_overlap_metrics.json").read_text())
-            self.assertEqual(extra["excluded_overlap_samples"], 1)
-            self.assertEqual(extra["sample_count"], 0)
+            final = (root / "reports/测试集报告.md").read_text(encoding="utf-8")
+            self.assertIn("纳入测试样本：1 条", final)
             # 相同 ID 不能把旧原文的预测绑定到新原文。
             write_jsonl(
                 root / "predictions.jsonl",

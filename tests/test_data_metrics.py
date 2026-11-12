@@ -120,11 +120,11 @@ class MetricsTests(unittest.TestCase):
         self.assertEqual(result["entities"], [entity(start=2, end=4)])
         self.assertEqual(result["errors"], [])
 
-    def test_parser_preserves_valid_offset_and_rejects_ambiguous_offset(self):
-        raw = json.dumps([entity(start=1, end=3), entity(start=3, end=5)])
+    def test_parser_computes_first_match_with_or_without_model_offsets(self):
+        raw = json.dumps([{"text": "口苦", "type": "临床表现"}, entity(start=3, end=5)])
         result = parse_prediction("口苦、口苦", raw)
-        self.assertEqual(result["entities"], [entity(start=3, end=5)])
-        self.assertEqual(result["invalid_by_type"], {"临床表现": 1})
+        self.assertEqual(result["entities"], [entity(start=0, end=2)])
+        self.assertEqual(result["invalid_by_type"], {})
 
     def test_duplicate_sample_ids_cannot_hide_false_negatives(self):
         record = self.record("口苦", [entity()], "[]")

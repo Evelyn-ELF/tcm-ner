@@ -43,7 +43,7 @@ python prepare_data.py
 
 ## 3. 训练
 
-默认训练批大小为 16，梯度累积步数为 1，单卡有效批大小为 16。每轮验证先用 `training.eval_batch_size` 分批计算损失，再用 `generation.batch_size` 分批生成预测，验证损失和验证生成的默认批大小分别为 4 和 8。生成上限由 `generation.max_new_tokens` 控制，默认每条 1536 个 token。
+默认训练批大小为 16，梯度累积步数为 1，单卡有效批大小为 16。每轮验证先用 `training.eval_batch_size` 分批计算损失，再用 `generation.batch_size` 分批生成预测，验证损失和验证生成的默认批大小分别为 4 和 16。生成上限由 `generation.max_new_tokens` 控制，默认每条 1536 个 token。
 
 默认使用 TensorBoard 在本地记录实验。先进行小规模检查，再运行完整训练：
 

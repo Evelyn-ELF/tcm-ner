@@ -57,6 +57,14 @@ class EvaluationCliTests(unittest.TestCase):
             extra = json.loads((root / "reports/test_without_dev_overlap_metrics.json").read_text())
             self.assertEqual(extra["excluded_overlap_samples"], 1)
             self.assertEqual(extra["sample_count"], 0)
+            # 相同 ID 不能把旧原文的预测绑定到新原文。
+            write_jsonl(
+                root / "predictions.jsonl",
+                [{"id": "a", "input": "头痛", "output": [], "raw_output": "[]"}],
+            )
+            result = subprocess.run(command, text=True, capture_output=True, timeout=15)
+            self.assertNotEqual(result.returncode, 0)
+            self.assertIn("原文不一致", result.stderr)
             # 漏掉任何测试 ID 时应失败，不能生成看似更高的指标。
             write_jsonl(root / "predictions.jsonl", [])
             result = subprocess.run(command, text=True, capture_output=True, timeout=15)

@@ -9,6 +9,7 @@
 | 运行训练、评估或预测 | 本文 |
 | 理解数据协议、模型流程和计分规则 | [技术方案](docs/中医药命名实体识别技术方案.md) |
 | 修改代码、运行检查、启用提交钩子 | [代码规范](docs/代码规范.md) |
+| 清洗数据、复核标注并重建数据集 | [数据清洗与标注复核手册](docs/数据清洗与标注复核手册.md) |
 | 查看已完成的验证及其限制 | [开发验证记录](docs/开发验证记录.md) |
 
 ## 1. 安装环境
@@ -36,13 +37,13 @@ python -m pip install -r requirements.txt
 python prepare_data.py
 ```
 
-结果写入 `data/processed/`：三份 JSONL、`labels.json` 和 `data_audit.json`。程序保留原文字符，从训练集中去除重复记录、隔离标注冲突，并排除与验证或测试原文重合的样本。验证、测试标注保持原样。
+结果写入 `data/processed/`：三份 JSONL、`labels.json` 和 `data_audit.json`。程序保留原文字符，从训练集中去除重复记录、隔离标注冲突，并排除与验证或测试原文重合的样本。测试集中与验证集原文重合的样本也会排除。随后对三个集合应用经复核的标注修订和样本排除清单。
 
-当前处理后训练／验证／测试为 **5174／657／658 条**。详细统计和数据局限见[验证记录](docs/开发验证记录.md)。
+正式数据的样本数和排除记录见[数据审计报告](data/processed/data_audit.json)，标注口径和复核流程见[清洗手册](docs/数据清洗与标注复核手册.md)。
 
 ## 3. 训练
 
-默认每次训练处理 4 条样本，累积 4 次梯度后更新参数，单卡有效批大小为 16。每轮验证先用 `training.eval_batch_size` 分批计算损失，再用 `generation.batch_size` 分批生成预测，两个批大小默认均为 4。生成上限由 `generation.max_new_tokens` 控制，默认每条 1536 个 token。
+默认训练批大小为 16，梯度累积步数为 1，单卡有效批大小为 16。每轮验证先用 `training.eval_batch_size` 分批计算损失，再用 `generation.batch_size` 分批生成预测，验证损失和验证生成的默认批大小分别为 4 和 8。生成上限由 `generation.max_new_tokens` 控制，默认每条 1536 个 token。
 
 默认使用 TensorBoard 在本地记录实验。先进行小规模检查，再运行完整训练：
 
@@ -94,7 +95,7 @@ python evaluate.py \
   --output-dir outputs/qwen25-qlora-01/recomputed
 ```
 
-指定 `--data` 后，以该文件的原文和真实标注为准，并要求预测 ID 集合完全一致。**当前代码未逐条核对两份文件的原文是否一致**，因此必须使用同一数据版本的预测。未指定 `--data` 时，采用预测文件自带的原文和标注。
+指定 `--data` 后，以该文件的真实标注为准。两份文件须具有完全相同的 ID 集合，且每个 ID 的原文须逐字一致。原文或样本范围变更后，请重新生成预测。未指定 `--data` 时，采用预测文件自带的原文和标注。
 
 ## 5. 预测新文本
 
@@ -106,7 +107,7 @@ CUDA_VISIBLE_DEVICES=0 python predict.py \
 
 输出包含 `entities`、`raw_output`、`parse_error`、`item_errors` 和 `hit_generation_limit`，以及输入原文 `text`。实体位置使用 Python 字符索引 `[start, end)`。输入过长会报错；无效 JSON 会保留错误信息，不自动修补。
 
-adapter 仍依赖原始基座。使用本地基座时，`best_adapter/runtime.json` 保存绝对路径，迁移机器后应确保路径可用或更新 `model.name`。
+adapter 仍依赖原始基座。使用本地基座时，`best_adapter/runtime.json` 保存绝对路径，迁移机器后，应确保该路径可用，或更新 `runtime.json` 中的 `model.name`，使其指向同一基座权重。
 
 ## 6. 查看结果
 
@@ -123,4 +124,4 @@ adapter 仍依赖原始基座。使用本地基座时，`best_adapter/runtime.js
 
 `summary.json` 的 `global_step` 是训练结束步数，最佳模型位置看 `best_checkpoint`。评估和数据转换会覆盖同名输出文件；需要保留旧结果时使用新目录。
 
-开发检查命令统一维护在[代码规范](docs/代码规范.md)，历史实施计划保留在 `docs/superpowers/plans/`，不作为当前操作指南。
+开发检查命令统一维护在[代码规范](docs/代码规范.md)。

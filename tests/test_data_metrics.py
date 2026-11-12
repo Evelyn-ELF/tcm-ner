@@ -94,7 +94,7 @@ class MetricsTests(unittest.TestCase):
         self.assertEqual(report["parse_failure_rate"], 1)
 
     def test_invalid_items_count_as_fp_including_unknown_type(self):
-        items = [entity(), entity(start=True), entity(kind="未知"), "坏条目"]
+        items = [entity(), entity(text="发热"), entity(kind="未知"), "坏条目"]
         report = score_predictions([self.record("口苦", [entity()], json.dumps(items))])
         self.assertEqual(report["micro"]["tp"], 1)
         self.assertEqual(report["micro"]["fp"], 3)
@@ -110,9 +110,21 @@ class MetricsTests(unittest.TestCase):
 
     def test_parser_rejects_non_arrays_and_inconsistent_text(self):
         self.assertTrue(parse_prediction("口苦", "{}")["parse_error"])
-        result = parse_prediction("口苦", json.dumps([entity(text="口")]))
+        result = parse_prediction("口苦", json.dumps([entity(text="发热")]))
         self.assertEqual(result["entities"], [])
         self.assertEqual(result["invalid_by_type"]["临床表现"], 1)
+
+    def test_parser_repairs_unique_offset_and_deduplicates(self):
+        raw = json.dumps([entity(start=1, end=3), entity(start=2, end=4)])
+        result = parse_prediction("患者口苦", raw)
+        self.assertEqual(result["entities"], [entity(start=2, end=4)])
+        self.assertEqual(result["errors"], [])
+
+    def test_parser_preserves_valid_offset_and_rejects_ambiguous_offset(self):
+        raw = json.dumps([entity(start=1, end=3), entity(start=3, end=5)])
+        result = parse_prediction("口苦、口苦", raw)
+        self.assertEqual(result["entities"], [entity(start=3, end=5)])
+        self.assertEqual(result["invalid_by_type"], {"临床表现": 1})
 
     def test_duplicate_sample_ids_cannot_hide_false_negatives(self):
         record = self.record("口苦", [entity()], "[]")

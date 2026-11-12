@@ -44,6 +44,9 @@ def main() -> None:
             by_id = {r["id"]: r for r in records}
             if set(by_id) != {s["id"] for s in samples}:
                 raise ValueError("预测文件与测试文件 ID 集合不一致，不能漏评或多评样本")
+            for sample in samples:
+                if by_id[sample["id"]]["input"] != sample["input"]:
+                    raise ValueError(f"预测文件与测试文件的原文不一致：{sample['id']}")
             records = [
                 {
                     **s,

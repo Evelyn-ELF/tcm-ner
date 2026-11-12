@@ -106,6 +106,11 @@ def validate_samples(samples: Sequence[Mapping[str, Any]]) -> None:
         keys = [entity_key(item) for item in entities]
         if len(set(keys)) != len(keys):
             raise ValueError(f"{sid} 有重复真实实体")
+        spans = sorted((item["start"], item["end"]) for item in entities)
+        if any(
+            end > next_start for (_, end), (next_start, _) in zip(spans, spans[1:], strict=False)
+        ):
+            raise ValueError(f"{sid} 有重叠真实实体")
 
 
 def read_bio(path: str | Path, split: str) -> list[Sample]:
@@ -180,7 +185,7 @@ def build_prompt(sample: Mapping[str, Any]) -> str:
 def parse_prediction(text: str, raw: str) -> ParsedPrediction:
     """解析模型输出并校验实体；JSON 错误返回空实体及 parse_error。
 
-    合法实体去重，非法条目按类别累计，用于额外计算假阳性。
+    偏移无效时尝试按唯一原文命中回填。合法实体去重，非法条目按类别累计。
     """
     result: ParsedPrediction = {
         "entities": [],
@@ -199,6 +204,12 @@ def parse_prediction(text: str, raw: str) -> ParsedPrediction:
     seen: set[tuple[str, int, int]] = set()
     invalid: Counter[str] = Counter()
     for index, item in enumerate(items):
+        if isinstance(item, dict) and not valid_entity(text, item):
+            surface = item.get("text")
+            if isinstance(surface, str) and surface:
+                start = text.find(surface)
+                if start >= 0 and start == text.rfind(surface):
+                    item = {**item, "start": start, "end": start + len(surface)}
         if not valid_entity(text, item):
             kind = item.get("type") if isinstance(item, dict) else None
             if isinstance(kind, str) and kind in LABELS:

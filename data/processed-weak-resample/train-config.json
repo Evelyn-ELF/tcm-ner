@@ -1,0 +1,47 @@
+{
+  "model": {
+    "name": "/mnt/Qwen2.5-7B",
+    "revision": "main",
+    "method": "qlora",
+    "precision": "auto"
+  },
+  "data": {
+    "processed_dir": "data/processed-weak-resample"
+  },
+  "training": {
+    "device": "cuda",
+    "output_root": "outputs",
+    "seed": 42,
+    "epochs": 3,
+    "max_steps": -1,
+    "batch_size": 16,
+    "eval_batch_size": 4,
+    "gradient_accumulation_steps": 1,
+    "learning_rate": 0.0002,
+    "warmup_ratio": 0.03,
+    "max_length": 2048,
+    "logging_steps": 10,
+    "gradient_checkpointing": true
+  },
+  "lora": {
+    "r": 16,
+    "alpha": 32,
+    "dropout": 0.05,
+    "target_modules": [
+      "q_proj",
+      "k_proj",
+      "v_proj",
+      "o_proj",
+      "gate_proj",
+      "up_proj",
+      "down_proj"
+    ]
+  },
+  "generation": {
+    "batch_size": 16,
+    "max_new_tokens": 1536
+  },
+  "tensorboard": {
+    "enabled": true
+  }
+}

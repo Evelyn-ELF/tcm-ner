@@ -24,7 +24,7 @@ class EncodingTests(unittest.TestCase):
         self.assertEqual(encoded["labels"][len(prefix) :], [101, 103, 1])
         self.assertEqual(encoded["attention_mask"], [1] * len(encoded["input_ids"]))
 
-    def test_answer_contains_only_unique_text_and_type(self):
+    def test_answer_preserves_repeated_entity_positions(self):
         sample = {
             "id": "1",
             "input": "口苦、口苦",
@@ -35,7 +35,11 @@ class EncodingTests(unittest.TestCase):
         }
         encoded = encode_sample(sample, CharacterTokenizer(), 1, 2048)
         answer = "".join(chr(token - 10) for token in encoded["labels"][:-1] if token != -100)
-        self.assertEqual(answer, '[{"text":"口苦","type":"临床表现"}]')
+        self.assertEqual(
+            answer,
+            '[{"text":"口苦","type":"临床表现","occurrence":1},'
+            '{"text":"口苦","type":"临床表现","occurrence":2}]',
+        )
 
     def test_long_samples_fail_instead_of_truncating(self):
         with self.assertRaisesRegex(ValueError, "超长.*1"):
@@ -70,3 +74,10 @@ class EncodingTests(unittest.TestCase):
 
 if __name__ == "__main__":
     unittest.main()
+
+
+def test_repeated_entity_occurrence():
+    from ner_utils import parse_prediction
+
+    raw = '[{"text":"针刺","type":"中医治疗","occurrence":2}]'
+    assert parse_prediction("针刺与针刺", raw)["entities"][0]["start"] == 3

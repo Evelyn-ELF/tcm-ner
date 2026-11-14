@@ -19,7 +19,10 @@ from ner_utils import (
     LEGACY_INSTRUCTION,
     LEGACY_TEMPLATE_VERSION,
     TEMPLATE_VERSION,
+    V2_INSTRUCTION,
+    V2_TEMPLATE_VERSION,
     build_prompt,
+    occurrence_starts,
     parse_prediction,
     write_json,
 )
@@ -28,9 +31,16 @@ from ner_utils import (
 def encode_sample(sample: Sample, tokenizer: Any, eos_id: int, max_length: int) -> EncodedSample:
     """编码提示、答案和 EOS，仅监督答案区；超出 max_length 时抛出 ValueError。"""
     prompt_ids = tokenizer(build_prompt(sample), add_special_tokens=False)["input_ids"]
-    mentions = dict.fromkeys((entity["text"], entity["type"]) for entity in sample["output"])
+    mentions = []
+    for entity in sample["output"]:
+        surface = entity["text"]
+        starts = occurrence_starts(sample["input"], surface)
+        mention: dict[str, str | int] = {"text": surface, "type": entity["type"]}
+        if len(starts) > 1:
+            mention["occurrence"] = starts.index(entity["start"]) + 1
+        mentions.append(mention)
     answer = json.dumps(
-        [{"text": text, "type": kind} for text, kind in mentions],
+        mentions,
         ensure_ascii=False,
         separators=(",", ":"),
     )
@@ -221,10 +231,15 @@ def generate_records(
                     # 已结束的样本会补齐到批内最长输出，只保留首个结束符之前的内容。
                     end = next((i for i, token in enumerate(output) if token in eos_ids), None)
                     raw = tokenizer.decode(output[:end], skip_special_tokens=True)
-                    parsed = parse_prediction(sample["input"], raw)
+                    parsed = parse_prediction(
+                        sample["input"],
+                        raw,
+                        require_occurrence=instruction == INSTRUCTION,
+                    )
                     records.append(
                         {
                             **sample,
+                            "instruction": instruction,
                             "raw_output": raw,
                             "predicted_entities": parsed["entities"],
                             "parse_error": parsed["parse_error"],
@@ -278,6 +293,7 @@ def load_adapter(adapter_path: str | Path, device_name: str) -> tuple[Any, Any, 
     if (meta["template_version"], meta["instruction"]) not in (
         (TEMPLATE_VERSION, INSTRUCTION),
         (LEGACY_TEMPLATE_VERSION, LEGACY_INSTRUCTION),
+        (V2_TEMPLATE_VERSION, V2_INSTRUCTION),
     ) or meta["labels"] != list(LABELS):
         raise ValueError("adapter 的模板或类别版本不一致")
     model, _, _, _ = load_base_model(meta["model"], device_name)

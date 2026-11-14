@@ -9,7 +9,9 @@ from typing import Any, cast
 
 from ner_types import MetricsReport, Prediction, Sample
 from ner_utils import (
+    INSTRUCTION,
     flatten_metrics,
+    occurrence_starts,
     parse_prediction,
     print_report,
     read_jsonl,
@@ -29,7 +31,7 @@ def write_final_report(path: Path, report: MetricsReport, test_data: str, source
         f"- 测试数据：`{test_data}`",
         f"- 预测来源：`{source}`",
         f"- 纳入测试样本：{report['sample_count']} 条",
-        "- 定位规则：按实体文本在原文中的首次精确匹配计算字符位置。",
+        "- 定位规则：新模板按出现序号定位，旧预测缺少序号时取首次精确匹配。",
         f"- 计分规则：{report['scoring_rule']}",
         f"- Macro-F1：{report['macro_f1']:.2%}",
         f"- JSON 解析失败：{report['parse_failure_count']} 条",
@@ -71,8 +73,17 @@ def merge_recheck(first: Mapping[str, Any], second: Mapping[str, Any]) -> dict[s
         items = []
     if not isinstance(items, list):
         items = []
+    require_occurrence = first.get("instruction") == INSTRUCTION
+    if require_occurrence:
+        added = [
+            {
+                **entity,
+                "occurrence": occurrence_starts(text, entity["text"]).index(entity["start"]) + 1,
+            }
+            for entity in added
+        ]
     raw = json.dumps([*items, *added], ensure_ascii=False)
-    parsed = parse_prediction(text, raw)
+    parsed = parse_prediction(text, raw, require_occurrence=require_occurrence)
     return {
         **first,
         "raw_output": raw,
@@ -125,6 +136,7 @@ def main() -> None:
             records = [
                 {
                     **s,
+                    "instruction": by_id[s["id"]].get("instruction", ""),
                     "raw_output": by_id[s["id"]]["raw_output"],
                     "hit_generation_limit": by_id[s["id"]].get("hit_generation_limit", False),
                 }

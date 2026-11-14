@@ -108,7 +108,7 @@ CUDA_VISIBLE_DEVICES=0 python predict.py \
   --text '患者口苦，予当归、丹参治疗。'
 ```
 
-输出包含 `entities`、`raw_output`、`parse_error`、`item_errors` 和 `hit_generation_limit`，以及输入原文 `text`。新训练的模型只生成实体文本与类别。程序取原文首次精确匹配，计算 Python 字符索引 `[start, end)`。旧适配器沿用训练时的提示，输出的偏移同样由程序重新计算。输入过长会报错；无效 JSON 会保留错误信息，不自动修补。
+输出包含 `entities`、`raw_output`、`parse_error`、`item_errors` 和 `hit_generation_limit`，以及输入原文 `text`。新模型输出实体文本和类别。文字在原文出现多次时，额外输出从 1 开始的 `occurrence`，按原文所有精确匹配位置从左到右编号。程序据此计算字符索引 `[start, end)`。旧适配器沿用原提示及首次匹配规则。输入过长会报错；无效 JSON 会保留错误信息，不自动修补。
 
 adapter 仍依赖原始基座。使用本地基座时，`best_adapter/runtime.json` 保存绝对路径，迁移机器后，应确保该路径可用，或更新 `runtime.json` 中的 `model.name`，使其指向同一基座权重。
 

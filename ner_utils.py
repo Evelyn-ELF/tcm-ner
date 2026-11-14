@@ -29,12 +29,18 @@ LEGACY_INSTRUCTION = (
     + "、".join(LABELS)
     + "。每个实体包含text、type、start、end；位置从0开始，end不包含在实体内。无实体时输出[]。"
 )
-INSTRUCTION = LEGACY_INSTRUCTION.replace(
+V2_INSTRUCTION = LEGACY_INSTRUCTION.replace(
     "每个实体包含text、type、start、end；位置从0开始，end不包含在实体内。",
     "每个实体仅包含text、type；text必须逐字复制原文。同类别的同名实体只输出一次。",
 )
 LEGACY_TEMPLATE_VERSION = "tcm-ner-plain-v1"
-TEMPLATE_VERSION = "tcm-ner-plain-v2"
+V2_TEMPLATE_VERSION = "tcm-ner-plain-v2"
+TEMPLATE_VERSION = "tcm-ner-plain-v3"
+INSTRUCTION = V2_INSTRUCTION.replace("仅包含", "包含").replace(
+    "同类别的同名实体只输出一次。",
+    "若text在原文出现多次，必须额外输出occurrence，从左到右按全部精确匹配位置"
+    "从1编号，包括长实体内部的匹配。每个应标位置输出一条。",
+)
 
 
 def write_json(path: str | Path, value: object) -> None:
@@ -183,15 +189,20 @@ def build_prompt(
     sample: Mapping[str, Any], instruction: str = INSTRUCTION, guidance: str = ""
 ) -> str:
     """仅使用原文和固定指令构建提示；指令版本不符时抛出 ValueError。"""
-    if instruction not in (INSTRUCTION, LEGACY_INSTRUCTION):
+    if instruction not in (INSTRUCTION, V2_INSTRUCTION, LEGACY_INSTRUCTION):
         raise ValueError("样本 instruction 与当前模板不一致，请重新生成数据")
     return f"任务：{instruction}{guidance}\n文本：{sample['input']}\n答案：\n"
 
 
-def parse_prediction(text: str, raw: str) -> ParsedPrediction:
+def occurrence_starts(text: str, surface: str) -> list[int]:
+    """列出全部精确匹配的起点，包括重叠匹配。"""
+    return [index for index in range(len(text)) if text.startswith(surface, index)]
+
+
+def parse_prediction(text: str, raw: str, *, require_occurrence: bool = False) -> ParsedPrediction:
     """解析模型输出并校验实体；JSON 错误返回空实体及 parse_error。
 
-    按原文首次精确命中计算偏移。合法实体去重，非法条目按类别累计。
+    按出现序号计算偏移，兼容没有序号的旧预测。合法实体去重，非法条目按类别累计。
     """
     result: ParsedPrediction = {
         "entities": [],
@@ -213,7 +224,12 @@ def parse_prediction(text: str, raw: str) -> ParsedPrediction:
         if isinstance(item, dict):
             surface = item.get("text")
             if isinstance(surface, str) and surface:
-                start = text.find(surface)
+                starts = occurrence_starts(text, surface)
+                ordinal = item.get("occurrence", 1)
+                missing = require_occurrence and len(starts) > 1 and "occurrence" not in item
+                start = -1
+                if not missing and type(ordinal) is int and 1 <= ordinal <= len(starts):
+                    start = starts[ordinal - 1]
                 item = {**item, "start": start, "end": start + len(surface)}
         if not valid_entity(text, item):
             kind = item.get("type") if isinstance(item, dict) else None
@@ -256,7 +272,11 @@ def score_predictions(records: Sequence[Mapping[str, Any]]) -> MetricsReport:
     counts: dict[str, Counter[str]] = {kind: Counter() for kind in LABELS}
     failures = unknown = invalid = capped = 0
     for record in records:
-        parsed = parse_prediction(record["input"], record["raw_output"])
+        parsed = parse_prediction(
+            record["input"],
+            record["raw_output"],
+            require_occurrence=record.get("instruction") == INSTRUCTION,
+        )
         failures += parsed["parse_error"] is not None
         unknown += parsed["unknown_type_fp"]
         invalid += sum(parsed["invalid_by_type"].values()) + parsed["unknown_type_fp"]

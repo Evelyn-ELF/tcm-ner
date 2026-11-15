@@ -35,12 +35,19 @@ V2_INSTRUCTION = LEGACY_INSTRUCTION.replace(
 )
 LEGACY_TEMPLATE_VERSION = "tcm-ner-plain-v1"
 V2_TEMPLATE_VERSION = "tcm-ner-plain-v2"
-TEMPLATE_VERSION = "tcm-ner-plain-v3"
-INSTRUCTION = V2_INSTRUCTION.replace("仅包含", "包含").replace(
+V3_TEMPLATE_VERSION = "tcm-ner-plain-v3"
+TEMPLATE_VERSION = "tcm-ner-plain-v4"
+V3_INSTRUCTION = V2_INSTRUCTION.replace("仅包含", "包含").replace(
     "同类别的同名实体只输出一次。",
     "若text在原文出现多次，必须额外输出occurrence，从左到右按全部精确匹配位置"
     "从1编号，包括长实体内部的匹配。每个应标位置输出一条。",
 )
+
+INSTRUCTION = V3_INSTRUCTION + (
+    "西医体检、检查和检验结果按临床表现标注，保留检查项目及明确的结果描述。"
+    "检查明确确诊的疾病按诊断语境标注。"
+)
+OCCURRENCE_INSTRUCTIONS = (V3_INSTRUCTION, INSTRUCTION)
 
 
 def write_json(path: str | Path, value: object) -> None:
@@ -189,7 +196,7 @@ def build_prompt(
     sample: Mapping[str, Any], instruction: str = INSTRUCTION, guidance: str = ""
 ) -> str:
     """仅使用原文和固定指令构建提示；指令版本不符时抛出 ValueError。"""
-    if instruction not in (INSTRUCTION, V2_INSTRUCTION, LEGACY_INSTRUCTION):
+    if instruction not in (*OCCURRENCE_INSTRUCTIONS, V2_INSTRUCTION, LEGACY_INSTRUCTION):
         raise ValueError("样本 instruction 与当前模板不一致，请重新生成数据")
     return f"任务：{instruction}{guidance}\n文本：{sample['input']}\n答案：\n"
 
@@ -275,7 +282,7 @@ def score_predictions(records: Sequence[Mapping[str, Any]]) -> MetricsReport:
         parsed = parse_prediction(
             record["input"],
             record["raw_output"],
-            require_occurrence=record.get("instruction") == INSTRUCTION,
+            require_occurrence=record.get("instruction") in OCCURRENCE_INSTRUCTIONS,
         )
         failures += parsed["parse_error"] is not None
         unknown += parsed["unknown_type_fp"]

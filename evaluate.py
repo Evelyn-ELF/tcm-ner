@@ -9,7 +9,7 @@ from typing import Any, cast
 
 from ner_types import MetricsReport, Prediction, Sample
 from ner_utils import (
-    INSTRUCTION,
+    OCCURRENCE_INSTRUCTIONS,
     flatten_metrics,
     occurrence_starts,
     parse_prediction,
@@ -73,7 +73,7 @@ def merge_recheck(first: Mapping[str, Any], second: Mapping[str, Any]) -> dict[s
         items = []
     if not isinstance(items, list):
         items = []
-    require_occurrence = first.get("instruction") == INSTRUCTION
+    require_occurrence = first.get("instruction") in OCCURRENCE_INSTRUCTIONS
     if require_occurrence:
         added = [
             {

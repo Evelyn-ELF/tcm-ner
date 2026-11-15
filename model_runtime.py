@@ -18,9 +18,12 @@ from ner_utils import (
     LABELS,
     LEGACY_INSTRUCTION,
     LEGACY_TEMPLATE_VERSION,
+    OCCURRENCE_INSTRUCTIONS,
     TEMPLATE_VERSION,
     V2_INSTRUCTION,
     V2_TEMPLATE_VERSION,
+    V3_INSTRUCTION,
+    V3_TEMPLATE_VERSION,
     build_prompt,
     occurrence_starts,
     parse_prediction,
@@ -234,7 +237,7 @@ def generate_records(
                     parsed = parse_prediction(
                         sample["input"],
                         raw,
-                        require_occurrence=instruction == INSTRUCTION,
+                        require_occurrence=instruction in OCCURRENCE_INSTRUCTIONS,
                     )
                     records.append(
                         {
@@ -292,6 +295,7 @@ def load_adapter(adapter_path: str | Path, device_name: str) -> tuple[Any, Any, 
     meta = json.loads((path / "runtime.json").read_text(encoding="utf-8"))
     if (meta["template_version"], meta["instruction"]) not in (
         (TEMPLATE_VERSION, INSTRUCTION),
+        (V3_TEMPLATE_VERSION, V3_INSTRUCTION),
         (LEGACY_TEMPLATE_VERSION, LEGACY_INSTRUCTION),
         (V2_TEMPLATE_VERSION, V2_INSTRUCTION),
     ) or meta["labels"] != list(LABELS):

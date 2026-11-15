@@ -77,11 +77,11 @@ tensorboard --logdir outputs
 
 ```bash
 CUDA_VISIBLE_DEVICES=0 python evaluate.py \
-  --adapter outputs/qwen25-qlora-02/best_adapter \
+  --adapter outputs/qwen25-qlora-04-weak-resample/best_adapter \
   --data data/processed/test.jsonl \
   --final-report \
   --batch-size 4 \
-  --output-dir outputs/qwen25-qlora-02/test-first-match
+  --output-dir outputs/qwen25-qlora-04-weak-resample/test-first-match
 ```
 
 测试集生成默认每批 4 条，可通过 `--batch-size` 调整。命令打印全部 10 类的 Precision、Recall、F1 和实体计数，保存原始预测及 JSON/CSV 报告。`--final-report` 生成 `测试集报告.md`，以指定测试集的全部样本计分，无需传入验证集。

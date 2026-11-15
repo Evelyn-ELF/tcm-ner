@@ -16,14 +16,9 @@ if TYPE_CHECKING:
 from ner_utils import (
     INSTRUCTION,
     LABELS,
-    LEGACY_INSTRUCTION,
-    LEGACY_TEMPLATE_VERSION,
     OCCURRENCE_INSTRUCTIONS,
+    SUPPORTED_TEMPLATES,
     TEMPLATE_VERSION,
-    V2_INSTRUCTION,
-    V2_TEMPLATE_VERSION,
-    V3_INSTRUCTION,
-    V3_TEMPLATE_VERSION,
     build_prompt,
     occurrence_starts,
     parse_prediction,
@@ -293,12 +288,11 @@ def load_adapter(adapter_path: str | Path, device_name: str) -> tuple[Any, Any, 
 
     path = Path(adapter_path)
     meta = json.loads((path / "runtime.json").read_text(encoding="utf-8"))
-    if (meta["template_version"], meta["instruction"]) not in (
-        (TEMPLATE_VERSION, INSTRUCTION),
-        (V3_TEMPLATE_VERSION, V3_INSTRUCTION),
-        (LEGACY_TEMPLATE_VERSION, LEGACY_INSTRUCTION),
-        (V2_TEMPLATE_VERSION, V2_INSTRUCTION),
-    ) or meta["labels"] != list(LABELS):
+    if (
+        SUPPORTED_TEMPLATES.get(meta["template_version"]) != meta["instruction"]
+        or meta["template_version"] not in SUPPORTED_TEMPLATES
+        or meta["labels"] != list(LABELS)
+    ):
         raise ValueError("adapter 的模板或类别版本不一致")
     model, _, _, _ = load_base_model(meta["model"], device_name)
     tokenizer = AutoTokenizer.from_pretrained(path, trust_remote_code=False)

@@ -47,6 +47,12 @@ INSTRUCTION = V3_INSTRUCTION + (
     "西医体检、检查和检验结果按临床表现标注，保留检查项目及明确的结果描述。"
     "检查明确确诊的疾病按诊断语境标注。"
 )
+SUPPORTED_TEMPLATES = {
+    LEGACY_TEMPLATE_VERSION: LEGACY_INSTRUCTION,
+    V2_TEMPLATE_VERSION: V2_INSTRUCTION,
+    V3_TEMPLATE_VERSION: V3_INSTRUCTION,
+    TEMPLATE_VERSION: INSTRUCTION,
+}
 OCCURRENCE_INSTRUCTIONS = (V3_INSTRUCTION, INSTRUCTION)
 
 
@@ -196,7 +202,7 @@ def build_prompt(
     sample: Mapping[str, Any], instruction: str = INSTRUCTION, guidance: str = ""
 ) -> str:
     """仅使用原文和固定指令构建提示；指令版本不符时抛出 ValueError。"""
-    if instruction not in (*OCCURRENCE_INSTRUCTIONS, V2_INSTRUCTION, LEGACY_INSTRUCTION):
+    if instruction not in SUPPORTED_TEMPLATES.values():
         raise ValueError("样本 instruction 与当前模板不一致，请重新生成数据")
     return f"任务：{instruction}{guidance}\n文本：{sample['input']}\n答案：\n"
 

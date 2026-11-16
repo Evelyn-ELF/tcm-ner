@@ -54,6 +54,17 @@ BOUNDARY_GUIDANCE = (
     "方剂保留属于名称的修饰语，排除用量、给药动作和连接标点。"
     "药品剂型属于原文完整药名时保留。按上下文区分诊断、症状和治疗。"
 )
+PRINCIPLE_GUIDANCE = (
+    "留意原文明确陈述的中医治则。遇到治以、拟、法当、佐以或兼以等施治表述，"
+    "逐项检查同句的施治原则，包括方名或药材列表之前的并列项。"
+    "按原文抽取实际施治原则，保留其余类别的常规抽取。"
+)
+VALIDATION_GUIDANCE = {
+    "baseline": "",
+    "boundary": BOUNDARY_GUIDANCE,
+    "recheck": "",
+    "principle": PRINCIPLE_GUIDANCE,
+}
 WEAK_TYPES = {"中医治则", "方剂"}
 RECHECK_GUIDANCE = (
     "本轮专项检查仅输出中医治则和方剂，其他类别不输出。"
@@ -108,7 +119,7 @@ def parse_args() -> argparse.Namespace:
     )
     parser.add_argument("--batch-size", type=int, default=4, help="测试集生成批大小")
     parser.add_argument("--final-report", action="store_true", help="生成中文测试集报告")
-    parser.add_argument("--validation-experiment", choices=["baseline", "boundary", "recheck"])
+    parser.add_argument("--validation-experiment", choices=VALIDATION_GUIDANCE)
     args = parser.parse_args()
     if args.validation_experiment and (not args.adapter or not args.data or args.final_report):
         parser.error("验证实验需要 --adapter 和 --data，并应单独运行")
@@ -165,7 +176,7 @@ def main() -> None:
             )
 
         start = perf_counter()
-        records = generate(BOUNDARY_GUIDANCE if args.validation_experiment == "boundary" else "")
+        records = generate(VALIDATION_GUIDANCE.get(args.validation_experiment or "", ""))
         first_seconds = perf_counter() - start
         if args.validation_experiment:
             output_dir = Path(args.output_dir)

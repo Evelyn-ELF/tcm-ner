@@ -6,7 +6,7 @@
     "precision": "auto"
   },
   "data": {
-    "processed_dir": "data/processed-weak-resample"
+    "processed_dir": "data/archive/processed-weak-resample"
   },
   "training": {
     "device": "cuda",

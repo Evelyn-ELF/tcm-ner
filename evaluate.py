@@ -31,7 +31,7 @@ def write_final_report(path: Path, report: MetricsReport, test_data: str, source
         f"- 测试数据：`{test_data}`",
         f"- 预测来源：`{source}`",
         f"- 纳入测试样本：{report['sample_count']} 条",
-        "- 定位规则：新模板按出现序号定位，旧预测缺少序号时取首次精确匹配。",
+        "- 定位规则：新模板的重复实体须提供出现序号；旧模板缺少序号时取首次精确匹配。",
         f"- 计分规则：{report['scoring_rule']}",
         f"- Macro-F1：{report['macro_f1']:.2%}",
         f"- JSON 解析失败：{report['parse_failure_count']} 条",

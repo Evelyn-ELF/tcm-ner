@@ -6,7 +6,7 @@
     "precision": "auto"
   },
   "data": {
-    "processed_dir": "data/processed-classic-pilot"
+    "processed_dir": "data/archive/processed-classic-50"
   },
   "training": {
     "device": "cuda",

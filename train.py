@@ -271,7 +271,6 @@ def _save_training_result(
     train_limit: int | None,
     eval_limit: int | None,
 ) -> None:
-    training = config["training"]
     if trainer.state.best_model_checkpoint is None:
         raise RuntimeError("未产生最佳 checkpoint，请检查验证策略")
     adapter = directory / "best_adapter"
@@ -288,9 +287,7 @@ def _save_training_result(
         "tensorboard_log_dir": str((directory / "tensorboard").resolve())
         if config["tensorboard"]["enabled"]
         else None,
-        "smoke_test": train_limit is not None
-        or eval_limit is not None
-        or training["max_steps"] > 0,
+        "smoke_test": train_limit is not None or eval_limit is not None,
     }
     write_json(directory / "summary.json", summary)
     print(f"最佳验证实体 Micro-F1：{trainer.state.best_metric:.4f}；adapter：{adapter.resolve()}")
